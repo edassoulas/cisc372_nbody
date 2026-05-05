@@ -111,5 +111,7 @@ int main(int argc, char **argv)
 #endif
 	printf("This took a total time of %f seconds\n",(double)t1/CLOCKS_PER_SEC);
 
+	cleanup();
 	freeHostMemory();
+	return 0;
 }

@@ -80,7 +80,21 @@ static int allocated_n   = 0;
 //Parameters: None
 //Returns: None
 //Side Effect: Modifies the hPos and hVel arrays with the new positions and accelerations after 1 INTERVAL
-void compute() {
+extern "C" void cleanup() {
+    if (d_pos) {
+        cudaFree(d_pos);
+        cudaFree(d_vel);
+        cudaFree(d_mass);
+        cudaFree(d_accels);
+        d_pos = NULL;
+        d_vel = NULL;
+        d_mass = NULL;
+        d_accels = NULL;
+        allocated_n = 0;
+    }
+}
+
+extern "C" void compute() {
     //total number of plants/asteroids/sun
     int n = NUMENTITIES;
 
