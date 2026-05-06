@@ -111,6 +111,10 @@ int main(int argc, char **argv)
 #endif
 	printf("This took a total time of %f seconds\n",(double)t1/CLOCKS_PER_SEC);
 
+	//added cleanup() to free GPU memory before program exit after i was
+	//having issues with my code exiting with error 209
+	//I asked claude sonnet 4.6 "how to solve exit code 209" and prompted
+	//it with my compute.cu and nbody.c code
 	cleanup();
 	freeHostMemory();
 	return 0;

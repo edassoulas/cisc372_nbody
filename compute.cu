@@ -5,13 +5,19 @@
 
 //kernel 1 - will run on GPU executed by many threads at the same time where 
 //each thread handles one cell (i,j) of the matrix
+// Constructs a NUMENTITIES x NUMENTITIES matrix to hold the pairwise
+// acceleration effects between any 2 objects
 
+
+// used a 1d array laid out in row major order instead of 2d array.
 __global__ void computeAccels(vector3* pos, double* mass, vector3* accels, int n) {
     
-    //have to cmpute global indexes for thread
+    //have to compute global indexes for thread
     int i = blockIdx.y * blockDim.y + threadIdx.y;
     int j = blockIdx.x * blockDim.x + threadIdx.x;
 
+    //used Claude Sonnet 4.6 to confirm that a 1d flattened array
+    //is more efficient than a 2d pointer array for GPU global memory access
     if (i >= n || j >= n) return;
 
     if (i == j) {
@@ -26,9 +32,12 @@ __global__ void computeAccels(vector3* pos, double* mass, vector3* accels, int n
         double magnitude_sq = distance[0]*distance[0]
                             + distance[1]*distance[1]
                             + distance[2]*distance[2];
+        //used claude sonnet 4.6 to verify that magnitude_sq < 1e-12 is the 
+        //appropraite epsilon for double precision gravity calculations
 
         //if too objects are really close together, mangitude_sq approaches 0
-	//which would cause div by 0, nd with random asteroids its possible
+	//which would cause div by 0, and with random asteroids its possible
+
         if (magnitude_sq < 1e-12) {
             FILL_VECTOR(accels[i * n + j], 0, 0, 0);
             return;
@@ -44,8 +53,8 @@ __global__ void computeAccels(vector3* pos, double* mass, vector3* accels, int n
     }
 }
 
-//kernel 2 which runs after kernel 1 is finished and each thread andles one onject (index i)
-// adds all accelerations in tow i of the accels matrix and uses that to update the velocity of the obnject which uses that velocity to update the position
+//kernel 2 which runs after kernel 1 is finished and each thread handles one onject (index i)
+// adds all accelerations in row i of the accels matrix and uses that to update the velocity of the obnject which uses that velocity to update the position
 
 __global__ void sumAndUpdate(vector3* pos, vector3* vel, vector3* accels, int n) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
@@ -68,7 +77,7 @@ __global__ void sumAndUpdate(vector3* pos, vector3* vel, vector3* accels, int n)
     }
 }
 
-// static pointers that live on GPI so they persist between calls to compute()
+// static pointers that live on GPU so they persist between calls to compute()
 //start as null then get allocated when compute() is called
 static vector3* d_pos    = NULL;
 static vector3* d_vel    = NULL;
@@ -80,6 +89,9 @@ static int allocated_n   = 0;
 //Parameters: None
 //Returns: None
 //Side Effect: Modifies the hPos and hVel arrays with the new positions and accelerations after 1 INTERVAL
+
+//added extern "c" with help of claude sonnet 4.6 because my code was breaking with nbody.c
+//since nvcc compiles as c++ 
 extern "C" void cleanup() {
     if (d_pos) {
         cudaFree(d_pos);
@@ -95,10 +107,10 @@ extern "C" void cleanup() {
 }
 
 extern "C" void compute() {
-    //total number of plants/asteroids/sun
+    //total number of planets/asteroids/sun
     int n = NUMENTITIES;
 
-    // gpu memory is allocated once and then reused, if memory was aollocated 
+    // gpu memory is allocated once and then reused, if memory was allocated 
     //for a different n, it is freed first
     if (allocated_n != n) {
         if (d_pos) {
@@ -136,7 +148,7 @@ extern "C" void compute() {
     //wait for kernel 2 to finish before results are copied to cpu
     cudaDeviceSynchronize();
 
-    // Copy device to hose (gpu to cpu)
+    // Copy device to host (gpu to cpu)
     // copy updated positions/velocities to cpu
     cudaMemcpy(hPos, d_pos, sizeof(vector3) * n, cudaMemcpyDeviceToHost);
     cudaMemcpy(hVel, d_vel, sizeof(vector3) * n, cudaMemcpyDeviceToHost);
